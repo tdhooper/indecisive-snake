@@ -2,7 +2,7 @@ var regl = createREGL({
   extensions: ['OES_texture_float', 'OES_texture_float_linear']
 });
 
-var points = 400;
+var points = 101;
 var verts = [];
 for (var i = 0; i < points * 2; i++) {
     verts.push([i, i]);
@@ -22,7 +22,9 @@ var state = (Array(2)).fill().map(() =>
       width: simulatePoints,
       height: 1,
       data: INITIAL_CONDITIONS,
-      type: 'float'
+      type: 'float',
+      min: 'linear',
+      mag:'linear'
     }),
     depthStencil: false
   })
@@ -81,6 +83,9 @@ var update = regl({
     bool first = floor(t * points) == 0.;
     bool mousedown = mouse.z == 1.;
 
+    // gl_FragColor = texture2D(state, uv);
+    // return;
+
     if (first) {
       p = texture2D(state, uv).xy;
       vec2 target;
@@ -102,8 +107,8 @@ var update = regl({
     float sampleX;
     vec4 sample;
     
-    vec2 mean;
-    vec2 dir;
+    vec2 mean = vec2(0);
+    vec2 dir = vec2(0);
 
     for (int i = 0; i < NUM_SAMPLES; i++) {
 
@@ -217,9 +222,12 @@ var debug = regl({
 
 
 var draw = regl({
-  primitive: 'lines',
+  primitive: 'triangle strip',
+  // primitive: 'points',
 
-  lineWidth: 7,
+  lineWidth: 1,
+
+  // frontFace: 'cw',
 
   frag: `
   precision mediump float;
@@ -229,8 +237,9 @@ var draw = regl({
   void main () {
     float on = smoothstep(0., .5, t);
     vec3 col = vec3(on, 1.-on, 1);
-    col = mix(col, col * .25, cos(t * 1000.) * .5 + .5);
+    col = mix(col, col * .25, cos(t * 500.) * .5 + .5);
     col *= 1.- t;
+    // col = vec3(1);
     gl_FragColor = vec4(col,1);
   }`,
 
@@ -244,12 +253,47 @@ var draw = regl({
   varying float t;
   varying float v;
   float PI = 3.14159265359;
+  varying float f;
+
+  const int NUM_SAMPLES = 2;
+  const int THIS_SAMPLE = 1;
+
   void main () {
+    gl_PointSize = 5.;
+
     float vertIndex = position.x;
-    v = floor(vertIndex * .5 + .5);
+    float invert = mod(vertIndex, 2.) * 2. - 1.;
+    // invert = 1.;
+
+    v = floor(vertIndex * .5);
+
     t = v / points;
-    vec2 pos;
-    pos = texture2D(state, vec2(t, 0)).xy / 255.;
+
+    vec4 samples[NUM_SAMPLES];
+    float sampleX;
+    vec4 sample;
+
+    vec2 dir = vec2(0);
+
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+      sampleX = clamp((v + float(i - (NUM_SAMPLES - 1) / 2)) / points, 0., 1.);
+      sample = texture2D(state, vec2(sampleX, 0));
+      samples[i] = sample;
+    }
+
+    vec2 mean = samples[THIS_SAMPLE].xy;
+
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+      dir += samples[i].xy - mean;
+    }
+
+    dir = normalize(dir);
+    dir = clamp(dir, vec2(-1.), vec2(1.)); // I dunno why, normalize should catch this
+
+    vec2 pos = samples[THIS_SAMPLE].xy / 255.;
+    vec2 perp = vec2(dir.y, -dir.x);
+    
+    pos += perp * .008 * invert;
     // convert range(0, 1) to range(-1, 1)
     pos = pos * 2. - 1.;
     // pos = vec2(sin(t * PI * 2.) * .5, cos(t * PI * 2.) * .5);
