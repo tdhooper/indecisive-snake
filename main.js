@@ -137,7 +137,7 @@ var update = regl({
     vec2 perp = normalize(vec2(dir.y, -dir.x));
     float lineDist = dot(perp, mean - p) * -1.;
 
-    float divergence = 10.;
+    float divergence = .1;
 
     lineDist = clamp(lineDist, -divergence, divergence);
 
@@ -217,9 +217,11 @@ var debug = regl({
 
 
 var draw = regl({
-  primitive: 'lines',
+  primitive: 'triangle strip',
 
-  lineWidth: 7,
+  lineWidth: 1,
+
+  // frontFace: 'cw',
 
   frag: `
   precision mediump float;
@@ -231,6 +233,7 @@ var draw = regl({
     vec3 col = vec3(on, 1.-on, 1);
     col = mix(col, col * .25, cos(t * 1000.) * .5 + .5);
     col *= 1.- t;
+    col = vec3(1);
     gl_FragColor = vec4(col,1);
   }`,
 
@@ -246,10 +249,24 @@ var draw = regl({
   float PI = 3.14159265359;
   void main () {
     float vertIndex = position.x;
-    v = floor(vertIndex * .5 + .5);
-    t = v / points;
-    vec2 pos;
-    pos = texture2D(state, vec2(t, 0)).xy / 255.;
+    float invert = mod(vertIndex, 2.) * 2. - 1.;
+    // invert = 1.;
+
+    v = floor(vertIndex * .5);
+
+    float t = v / points;
+    float t2 = (v + 1.) / points;
+
+    if (t2 < 0.) {
+      // t2 = (v + 1.) / points;
+      // invert *= -1.;
+    }
+    vec2 pos = texture2D(state, vec2(t, 0)).xy / 255.;
+    vec2 pos2 = texture2D(state, vec2(t2, 0)).xy / 255.;
+    vec2 normal = normalize(pos2 - pos);
+    vec2 perp = vec2(normal.y, -normal.x);
+    
+    pos += perp * .01 * invert;
     // convert range(0, 1) to range(-1, 1)
     pos = pos * 2. - 1.;
     // pos = vec2(sin(t * PI * 2.) * .5, cos(t * PI * 2.) * .5);
